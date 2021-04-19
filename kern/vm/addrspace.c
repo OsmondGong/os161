@@ -61,7 +61,10 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-
+	for (int i = 0; i < 256; i++) {
+		as->pt[i] = NULL;
+	}
+	heap_start = 
 	return as;
 }
 
