@@ -72,22 +72,82 @@ as_create(void)
 	return as;
 }
 
-// 
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
+	// create new address space
 	struct addrspace *newas;
-
 	newas = as_create();
-	if (newas==NULL) {
+
+	// return error if not enough memory
+	if (newas == NULL) {
 		return ENOMEM;
 	}
 
-	/*
-	 * Write this.
-	 */
+	// loop through old page table and hard copy contents to new address space
+	for (int i = 0; i < FIRST_LEVEL_SIZE) {
+		if (!old->pt[i]) continue;
+		newas->pt[i] = kmalloc(SECOND_LEVEL_SIZE * sizeof(paddr_t *)));
+		// return error if not enough memory
+		if (newas->pt[i] == NULL) {
+			return ENOMEM;
+		}
+		for (int j = 0; j < SECOND_LEVEL_SIZE) {
+			if (old->pt[i][j]) {
+				newas->pt[i][j] = kmalloc(THIRD_LEVEL_SIZE *sizeof(paddr_t));
+				// return error if not enough memory
+				if (newas->pt[i][j] == NULL) {
+					return ENOMEM;
+				}
+				for (int k = 0; k < THIRD_LEVEL_SIZE) {
+					if (old->pt[i][j][k]) {
+						int dirty_bit = old->page_table[i][j] & TLBLO_DIRTY;    
+						vaddr_t new_frame_addr = alloc_kpages(1);
+						memcpy((void *)new_frame_addr, (const void *)PADDR_TO_KVADDR(old->page_table[i][j] & PAGE_FRAME), PAGE_SIZE);
+						newas->page_table[i][j] = (KVADDR_TO_PADDR(new_frame_addr) & PAGE_FRAME) | dirty_bit | TLBLO_VALID;
+					}
+					else {
+						newas->pt[i][j][k] = 0;
+					}
+				}
+			}
+			else {
+				newas->pt[i][j] = NULL;
+			}
+			
+		}
+	}
 
-	(void)old;
+	// no regions
+	if (old->regions == NULL) {
+		newas->regions = NULL;
+		*ret = newas;
+		return 0;
+	}
+
+	// copy head of linked list
+	struct regions *new_head = malloc(sizeof(struct regions *));
+	new_head->start_addr = old->regions->start_addr;
+	new_head->npages = old->regions->npages;
+	new_head->flags = old->regions->flags;
+	new_head->temp_flags = old->regions->temp_flags;
+
+	struct regions *p = new_head;
+	list = old->regions->next;
+	// copy rest of linked list
+	while(list != NULL) {
+		p->next = kmalloc(sizeof(struct regions *));
+        if (!p->next) {
+            as_destroy(newas);
+            return ENOMEM; /* Out of memory */
+        }
+		p = p->next;
+		p->start_addr = list->start_addr;
+		p->npages = list->npages;
+		p->flags = olistld->flags;
+		p->temp_flags = list->temp_flags;
+	}
+	p->next = NULL;
 
 	*ret = newas;
 	return 0;
