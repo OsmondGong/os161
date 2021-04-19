@@ -38,6 +38,8 @@
 #include <vm.h>
 #include <proc.h>
 
+#include <elf.h>
+
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
  * assignment, this file is not compiled or linked or in any way
@@ -113,14 +115,14 @@ as_destroy(struct addrspace *as)
 	}
 
 	// Free region linked list
-	struct region *head = as->regions;
+	struct region *cur = as->regions;
 	struct region *tmp;
-	while (head != NULL) {
-		tmp = head;
-		head = head->next;
+	while (cur != NULL) {
+		tmp = cur;
+		cur = cur->next;
 		kfree(tmp)
 	}
-	
+
 	kfree(as);
 }
 
@@ -171,13 +173,39 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	 * Write this.
 	 */
 
-	(void)as;
-	(void)vaddr;
-	(void)memsize;
-	(void)readable;
-	(void)writeable;
-	(void)executable;
-	return ENOSYS; /* Unimplemented */
+	size_t npages = memsize / PAGE_SIZE;
+	// round up npages
+	if (memsize % PAGE_SIZE) npages++;
+
+	// Make region
+	struct region *r = kmalloc(sizeof(struct region));
+	if (r == NULL) return ENOMEM;
+	r->start_vaddr = vaddr & PAGE_FRAME;
+	r->npages = npages;
+	r->flags = r->temp_flags = readable | writable | executable;
+	r->next = NULL;
+	
+	// Add region to address space
+	if (as->regions == NULL) as->regions = r;
+	else {
+		struct region *cur = as->regions;
+		struct region *prev = NULL;
+		while (cur != NULL) {
+			if (cur->start_vaddr >= r->start_vaddr) break;
+			prev = cur;
+			cur = cur->next;
+		}
+		prev->next = r;
+		r->next = cur;
+	}
+
+	//(void)as;
+	//(void)vaddr;
+	//(void)memsize;
+	//(void)readable;
+	//(void)writeable;
+	//(void)executable;
+	return 0;
 }
 
 int
@@ -187,7 +215,13 @@ as_prepare_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-	(void)as;
+	// set as writable for each region in address space
+	struct region *cur = as->regions;
+	while (cur != NULL) {
+		cur->flags = cur->flags | PF_W;		// make region writable
+		cur = cur->next;
+	}
+
 	return 0;
 }
 
@@ -198,7 +232,15 @@ as_complete_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-	(void)as;
+	// set back to READ ONLY for READ ONLY regions
+	struct region *cur = as->regions;
+	while (cur != NULL) {
+		cur->flags = cur->temp_flags;
+	}
+
+	// flush TLB at end since TLB has writing enabled while loading segments
+	as_activate(as);
+
 	return 0;
 }
 
@@ -208,8 +250,9 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	/*
 	 * Write this.
 	 */
-
-	(void)as;
+	// Bottom of stack (16 pages) to top of stack defined as RW
+	int err = as_define_region(as, USERSTACK - STACK_SIZE, STACK_SIZE, 1, 1, 0);
+	if (err) return err;
 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;

@@ -48,9 +48,9 @@ struct vnode;
  */
 
 struct region {
-        vaddr_t start_addr;
+        vaddr_t start_vaddr;
         size_t npages;
-        int writeable;
+        int flags;
         struct region *next;
 }
 

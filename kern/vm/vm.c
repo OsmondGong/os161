@@ -6,9 +6,6 @@
 #include <vm.h>
 #include <machine/tlb.h>
 
-#define VM_FAULT_READ       0   // Read attempted
-#define VM_FAULT_WRITE      1   // Write attempted
-#define VM_FAULT_READONLY   2   // Write to read only page attempted
 /* Place your page table functions here */
 
 
