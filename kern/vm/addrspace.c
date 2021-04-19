@@ -71,11 +71,6 @@ as_create(void)
 	
 	return as;
 }
-<<<<<<< HEAD
-
-=======
- 
->>>>>>> as_copy
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -178,21 +173,12 @@ as_destroy(struct addrspace *as)
 		}
 	}
 
-<<<<<<< HEAD
 	// Free region linked list
 	struct region *cur = as->regions;
 	struct region *tmp;
 	while (cur != NULL) {
 		tmp = cur;
 		cur = cur->next;
-=======
-	// Free regions linked list
-	struct regions *head = as->regions;
-	struct regions *tmp;
-	while (head != NULL) {
-		tmp = head;
-		head = head->next;
->>>>>>> as_copy
 		kfree(tmp)
 	}
 
