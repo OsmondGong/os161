@@ -51,6 +51,7 @@ struct region {
         vaddr_t start_vaddr;
         size_t npages;
         int flags;
+        int temp_flags;         // for prepare_load and complete_load
         struct region *next;
 }
 
