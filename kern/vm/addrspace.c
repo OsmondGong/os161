@@ -65,6 +65,7 @@ as_create(void)
 	return as;
 }
 
+// 
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -95,6 +96,7 @@ as_destroy(struct addrspace *as)
 	kfree(as);
 }
 
+// Put translations into TLB of current address space, flush TLB
 void
 as_activate(void)
 {
@@ -116,6 +118,7 @@ as_activate(void)
 	splx(spl);
 }
 
+// Remove translations in TLB, flush TLB (override with invalid entries)
 void
 as_deactivate(void)
 {
