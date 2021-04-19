@@ -35,7 +35,9 @@
  *
  * You'll probably want to add stuff here.
  */
-
+#define FIRST_LEVEL_SIZE        256
+#define SECOND_LEVEL_SIZE       64
+#define THIRD_LEVEL_SIZE        64
 
 #include <machine/vm.h>
 

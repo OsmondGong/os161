@@ -61,10 +61,12 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-	for (int i = 0; i < 256; i++) {
+	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		as->pt[i] = NULL;
 	}
-	heap_start = 
+	as->regions = NULL;
+	
+	
 	return as;
 }
 
@@ -95,7 +97,30 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
+	if (!as) return
+	
+	// Free page table
+	for (int i = 0; i < FIRST_LEVEL_SIZE) {
+		if (!as->pt[i]) continue;
+		for (int j = 0; j < SECOND_LEVEL_SIZE) {
+			if (!as->pt[i][j]) continue;
+			for (int k = 0; k < THIRD_LEVEL_SIZE) {
+				if (!as->pt[i][j][k]) continue;
+				free_kpages(PADDR_TO_KVADDR(as->pt[i][j][k] & PAGE_FRAME));
+			}
+			free_kpages(PADDR_TO_KVADDR(as->pt[i][j] & PAGE_FRAME));
+		}
+	}
 
+	// Free region linked list
+	struct region *head = as->regions;
+	struct region *tmp;
+	while (head != NULL) {
+		tmp = head;
+		head = head->next;
+		kfree(tmp)
+	}
+	
 	kfree(as);
 }
 

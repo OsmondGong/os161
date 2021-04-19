@@ -47,6 +47,13 @@ struct vnode;
  * You write this.
  */
 
+struct region {
+        vaddr_t start_addr;
+        size_t npages;
+        int writeable;
+        struct region *next;
+}
+
 struct addrspace {
 #if OPT_DUMBVM
         vaddr_t as_vbase1;
@@ -58,11 +65,11 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
-        unsigned int **pt[256];
-        vaddr_t stack;
-        vaddr_t heap_start;
-        vaddr_t heap_end;
-
+        paddr_t **pt[FIRST_LEVEL_SIZE];
+        // vaddr_t stack;
+        // vaddr_t heap_start;
+        // vaddr_t heap_end;
+        struct region *regions;
 #endif
 };
 
