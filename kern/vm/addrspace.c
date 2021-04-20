@@ -55,18 +55,20 @@ as_create(void)
 {
 	struct addrspace *as;
 
+	// Malloc memory for as
 	as = kmalloc(sizeof(struct addrspace));
 	if (as == NULL) {
 		return NULL;
 	}
 
-	/*
-	 * Initialize as needed.
-	 */
+	// Malloc memory for top level table
 	as->pt = kmalloc(FIRST_LEVEL_SIZE * sizeof(paddr_t **));
 	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
+		// Initialise first level to all NULL
 		as->pt[i] = NULL;
 	}
+
+	// Initialise as regions as empty
 	as->regions = NULL;
 	
 	
@@ -161,12 +163,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 void
 as_destroy(struct addrspace *as)
-{
-	/*
-	 * Clean up as needed.
-	 */
-	if (!as) return;
-	
+{	
 	// Free page table
 	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		if (!as->pt[i]) continue;
@@ -239,13 +236,8 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
-
 	size_t npages = memsize / PAGE_SIZE;
-	// round up npages
-	if (memsize % PAGE_SIZE) npages++;
+	if (memsize % PAGE_SIZE) npages++; 		// round up npages
 
 	// Make region
 	struct region *r = kmalloc(sizeof(struct region));
@@ -260,11 +252,13 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	else {
 		struct region *cur = as->regions;
 		struct region *prev = NULL;
+		// Find correct vaddr
 		while (cur != NULL) {
 			if (cur->start_vaddr >= r->start_vaddr) break;
 			prev = cur;
 			cur = cur->next;
 		}
+		// At correct vadrr
 		prev->next = r;
 		r->next = cur;
 	}
@@ -282,11 +276,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 int
 as_prepare_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
-	// set as writeable for each region in address space
+	// Set as writeable for each region in address space
 	struct region *cur = as->regions;
 	while (cur != NULL) {
         cur->writeable = 1;
@@ -299,10 +289,6 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
 	// set back to READ ONLY for READ ONLY regions
 	struct region *cur = as->regions;
 	while (cur != NULL) {
@@ -319,9 +305,6 @@ as_complete_load(struct addrspace *as)
 int
 as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 {
-	/*
-	 * Write this.
-	 */
 	// Bottom of stack (16 pages) to top of stack defined as RW
 	int err = as_define_region(as, USERSTACK - VIRTUAL_STACK_SIZE, VIRTUAL_STACK_SIZE, 1, 1, 0);
 	if (err) return err;

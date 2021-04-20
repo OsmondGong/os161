@@ -48,6 +48,7 @@ void vm_bootstrap(void)
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
+    // Check if faulttype is valid, EFAULT if writing to READONLY
     switch (faulttype) {
 	    case VM_FAULT_READONLY:
             return EFAULT;
@@ -58,69 +59,56 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 	    case VM_FAULT_WRITE:
 		    break;
 
+        // Invalid fault type
 	    default:
 		    return EINVAL;
 	}
-    if (faultaddress == 0x0) {
-        return EINVAL;
-    }
 
-    // don't know if this is what they want as index.
-    // gets bits from page number
+    // Get bits from page number
     uint32_t page_number = faultaddress & PAGE_FRAME;
     uint32_t top_table_index = page_number >> 24;
     uint32_t second_table_index = page_number << 8 >> 26;
     uint32_t third_table_index = page_number << 14 >> 26;
 
     struct addrspace *as = proc_getas();
+    // Could not get as
     if (!as) {
         return EFAULT;
     }
 
-    // int if_top_null = 0;
-    // if not in page table, add to page table
+    // If not in top level page table, add to page table
     if (!as->pt[top_table_index]) {
-        // if_top_null = 1;
         int err = pt_insert_top(as, top_table_index);
         if (err) {
             return err;
         }
     }
-    // int if_second_null = 0;
+    // If not in second level table, add to pt
     if (!as->pt[top_table_index][second_table_index]) {
-        // if_second_null = 1;
         int err = pt_insert_second(as, top_table_index, second_table_index);
         if (err) {
-            // if (if_top_null) {
-            //     // pt_free_top(as, top_table_index);
-            // }
             return err;
         }
     }
+    // If not in third level table, add to pt
     if (!as->pt[top_table_index][second_table_index][third_table_index]) {
-        //check if in region
         struct region *cur_region = as->regions;
+        // Get valid region
         while (cur_region != NULL) {
             vaddr_t cur_end_address = cur_region->start_vaddr + (cur_region->npages * PAGE_SIZE);
             if (faultaddress >= cur_region->start_vaddr && faultaddress <= cur_end_address) {
-                // cur_region is now the region :]
+                // cur_region is now the region >:]
                 break;
             }
             cur_region = cur_region->next;
         }
         // if no valid region
         if (cur_region == NULL) {
-            // if (if_top_null) {
-            //     pt_free_top(as, top_table_index);
-            // }
             return EFAULT;
         }
         // insert into page table
         vaddr_t vaddr = alloc_kpages(1);
         if (!vaddr) {
-            // if (if_top_null) {
-            //     pt_free_top(as, top_table_index);
-            // }
             return ENOMEM;
         }
         bzero((void *)vaddr, PAGE_SIZE);
@@ -131,9 +119,10 @@ vm_fault(int faulttype, vaddr_t faultaddress)
             as->pt[top_table_index][second_table_index][third_table_index] = KVADDR_TO_PADDR(vaddr) | TLBLO_VALID;
         }
     }
-
+    
     uint32_t entry_lo = as->pt[top_table_index][second_table_index][third_table_index];
 
+    // Disable interrupts for tlb_random
     int spl = splhigh();
     tlb_random(page_number, entry_lo);
     splx(spl); 
