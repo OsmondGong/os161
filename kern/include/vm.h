@@ -46,6 +46,7 @@
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
 
+#define VIRTUAL_STACK_SIZE 16 * PAGE_SIZE
 
 /* Initialization function */
 void vm_bootstrap(void);

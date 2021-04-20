@@ -53,7 +53,7 @@ struct region {
         int flags;
         int temp_flags;         // for prepare_load and complete_load
         struct region *next;
-}
+};
 
 struct addrspace {
 #if OPT_DUMBVM

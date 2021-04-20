@@ -84,26 +84,26 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	}
 
 	// loop through old page table and hard copy contents to new address space
-	for (int i = 0; i < FIRST_LEVEL_SIZE) {
+	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		if (!old->pt[i]) continue;
-		newas->pt[i] = kmalloc(SECOND_LEVEL_SIZE * sizeof(paddr_t *)));
+		newas->pt[i] = kmalloc(SECOND_LEVEL_SIZE * sizeof(paddr_t *));
 		// return error if not enough memory
 		if (newas->pt[i] == NULL) {
 			return ENOMEM;
 		}
-		for (int j = 0; j < SECOND_LEVEL_SIZE) {
+		for (int j = 0; j < SECOND_LEVEL_SIZE; j++) {
 			if (old->pt[i][j]) {
 				newas->pt[i][j] = kmalloc(THIRD_LEVEL_SIZE *sizeof(paddr_t));
 				// return error if not enough memory
 				if (newas->pt[i][j] == NULL) {
 					return ENOMEM;
 				}
-				for (int k = 0; k < THIRD_LEVEL_SIZE) {
+				for (int k = 0; k < THIRD_LEVEL_SIZE; k++) {
 					if (old->pt[i][j][k]) {
-						int dirty_bit = old->page_table[i][j] & TLBLO_DIRTY;    
+						int dirty_bit = old->pt[i][j][k] & TLBLO_DIRTY;    
 						vaddr_t new_frame_addr = alloc_kpages(1);
-						memcpy((void *)new_frame_addr, (const void *)PADDR_TO_KVADDR(old->page_table[i][j] & PAGE_FRAME), PAGE_SIZE);
-						newas->page_table[i][j] = (KVADDR_TO_PADDR(new_frame_addr) & PAGE_FRAME) | dirty_bit | TLBLO_VALID;
+						memcpy((void *)new_frame_addr, (const void *)PADDR_TO_KVADDR(old->pt[i][j][k] & PAGE_FRAME), PAGE_SIZE);
+						newas->pt[i][j][k] = (KVADDR_TO_PADDR(new_frame_addr) & PAGE_FRAME) | dirty_bit | TLBLO_VALID;
 					}
 					else {
 						newas->pt[i][j][k] = 0;
@@ -125,14 +125,14 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	}
 
 	// copy head of linked list
-	struct regions *new_head = malloc(sizeof(struct regions *));
-	new_head->start_addr = old->regions->start_addr;
+	struct region *new_head = kmalloc(sizeof(struct region *));
+	new_head->start_vaddr = old->regions->start_vaddr;
 	new_head->npages = old->regions->npages;
 	new_head->flags = old->regions->flags;
 	new_head->temp_flags = old->regions->temp_flags;
 
-	struct regions *p = new_head;
-	list = old->regions->next;
+	struct region *p = new_head;
+	struct region *list = old->regions->next;
 	// copy rest of linked list
 	while(list != NULL) {
 		p->next = kmalloc(sizeof(struct regions *));
@@ -141,9 +141,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
             return ENOMEM; /* Out of memory */
         }
 		p = p->next;
-		p->start_addr = list->start_addr;
+		p->start_vaddr = list->start_vaddr;
 		p->npages = list->npages;
-		p->flags = olistld->flags;
+		p->flags = list->flags;
 		p->temp_flags = list->temp_flags;
 	}
 	p->next = NULL;
@@ -158,18 +158,18 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
-	if (!as) return
+	if (!as) return;
 	
 	// Free page table
-	for (int i = 0; i < FIRST_LEVEL_SIZE) {
+	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		if (!as->pt[i]) continue;
-		for (int j = 0; j < SECOND_LEVEL_SIZE) {
+		for (int j = 0; j < SECOND_LEVEL_SIZE; j++) {
 			if (!as->pt[i][j]) continue;
-			for (int k = 0; k < THIRD_LEVEL_SIZE) {
+			for (int k = 0; k < THIRD_LEVEL_SIZE; k++) {
 				if (!as->pt[i][j][k]) continue;
 				free_kpages(PADDR_TO_KVADDR(as->pt[i][j][k] & PAGE_FRAME));
 			}
-			free_kpages(PADDR_TO_KVADDR(as->pt[i][j] & PAGE_FRAME));
+			kfree(as->pt[i][j]);
 		}
 	}
 
@@ -179,7 +179,7 @@ as_destroy(struct addrspace *as)
 	while (cur != NULL) {
 		tmp = cur;
 		cur = cur->next;
-		kfree(tmp)
+		kfree(tmp);
 	}
 
 	kfree(as);
@@ -241,7 +241,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	if (r == NULL) return ENOMEM;
 	r->start_vaddr = vaddr & PAGE_FRAME;
 	r->npages = npages;
-	r->flags = r->temp_flags = readable | writable | executable;
+	r->flags = r->temp_flags = readable | writeable | executable;
 	r->next = NULL;
 	
 	// Add region to address space
@@ -299,7 +299,7 @@ as_complete_load(struct addrspace *as)
 	}
 
 	// flush TLB at end since TLB has writing enabled while loading segments
-	as_activate(as);
+	as_activate();
 
 	return 0;
 }
@@ -311,7 +311,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	 * Write this.
 	 */
 	// Bottom of stack (16 pages) to top of stack defined as RW
-	int err = as_define_region(as, USERSTACK - STACK_SIZE, STACK_SIZE, 1, 1, 0);
+	int err = as_define_region(as, USERSTACK - VIRTUAL_STACK_SIZE, VIRTUAL_STACK_SIZE, 1, 1, 0);
 	if (err) return err;
 
 	/* Initial user-level stack pointer */
