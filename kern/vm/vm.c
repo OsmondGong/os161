@@ -50,6 +50,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 {
     // Writing to READ ONLY page, fault
     if (faulttype == VM_FAULT_READONLY) {
+        panic("readonly");
         return EFAULT;
     }
     if (faultaddress == 0x0) {
@@ -64,17 +65,27 @@ vm_fault(int faulttype, vaddr_t faultaddress)
     uint32_t third_table_index = page_number << 14 >> 26;
 
     struct addrspace *as = proc_getas();
+    if (!as) {
+        return EFAULT;
+    }
 
+    // int if_top_null = 0;
     // if not in page table, add to page table
-    if (as->pt[top_table_index] == NULL) {
+    if (!as->pt[top_table_index]) {
+        // if_top_null = 1;
         int err = pt_insert_top(as, top_table_index);
         if (err) {
             return err;
         }
     }
+    // int if_second_null = 0;
     if (!as->pt[top_table_index][second_table_index]) {
+        // if_second_null = 1;
         int err = pt_insert_second(as, top_table_index, second_table_index);
         if (err) {
+            // if (if_top_null) {
+            //     // pt_free_top(as, top_table_index);
+            // }
             return err;
         }
     }
@@ -87,17 +98,24 @@ vm_fault(int faulttype, vaddr_t faultaddress)
                 // cur_region is now the region :]
                 break;
             }
+            cur_region = cur_region->next;
         }
         // if no valid region
         if (cur_region == NULL) {
+            // if (if_top_null) {
+            //     pt_free_top(as, top_table_index);
+            // }
             return EFAULT;
         }
         // insert into page table
         vaddr_t vaddr = alloc_kpages(1);
         if (!vaddr) {
+            // if (if_top_null) {
+            //     pt_free_top(as, top_table_index);
+            // }
             return ENOMEM;
         }
-        bzero(&vaddr, PAGE_SIZE);
+        bzero((void *)vaddr, PAGE_SIZE);
         if (cur_region->flags & PF_W) {
             as->pt[top_table_index][second_table_index][third_table_index] = KVADDR_TO_PADDR(vaddr) | TLBLO_DIRTY | TLBLO_VALID;
         }

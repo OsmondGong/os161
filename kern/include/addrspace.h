@@ -66,7 +66,7 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
-        paddr_t **pt[FIRST_LEVEL_SIZE];
+        paddr_t ***pt;
         // vaddr_t stack;
         // vaddr_t heap_start;
         // vaddr_t heap_end;

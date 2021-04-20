@@ -63,14 +63,15 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
+	as->pt = kmalloc(FIRST_LEVEL_SIZE * sizeof(paddr_t **));
 	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		as->pt[i] = NULL;
 	}
 	as->regions = NULL;
 	
-	
 	return as;
 }
+
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
@@ -113,7 +114,6 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			else {
 				newas->pt[i][j] = NULL;
 			}
-			
 		}
 	}
 
@@ -145,6 +145,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		p->npages = list->npages;
 		p->flags = list->flags;
 		p->temp_flags = list->temp_flags;
+		list = list->next;
 	}
 	p->next = NULL;
 
@@ -171,6 +172,7 @@ as_destroy(struct addrspace *as)
 			}
 			kfree(as->pt[i][j]);
 		}
+		kfree(as->pt[i]);
 	}
 
 	// Free region linked list
@@ -211,7 +213,7 @@ as_activate(void)
 void
 as_deactivate(void)
 {
-	/* nothing */
+	as_activate();
 }
 
 /*
@@ -228,10 +230,6 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
-	/*
-	 * Write this.
-	 */
-
 	size_t npages = memsize / PAGE_SIZE;
 	// round up npages
 	if (memsize % PAGE_SIZE) npages++;
@@ -296,6 +294,7 @@ as_complete_load(struct addrspace *as)
 	struct region *cur = as->regions;
 	while (cur != NULL) {
 		cur->flags = cur->temp_flags;
+		cur = cur->next;
 	}
 
 	// flush TLB at end since TLB has writing enabled while loading segments
