@@ -48,11 +48,19 @@ void vm_bootstrap(void)
 int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
-    // Writing to READ ONLY page, fault
-    if (faulttype == VM_FAULT_READONLY) {
-        panic("readonly");
-        return EFAULT;
-    }
+    switch (faulttype) {
+	    case VM_FAULT_READONLY:
+            return EFAULT;
+
+	    case VM_FAULT_READ:
+            break;
+
+	    case VM_FAULT_WRITE:
+		    break;
+
+	    default:
+		    return EINVAL;
+	}
     if (faultaddress == 0x0) {
         return EINVAL;
     }

@@ -63,6 +63,7 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
+	as->pt = kmalloc(FIRST_LEVEL_SIZE * sizeof(paddr_t **));
 	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		as->pt[i] = NULL;
 	}
@@ -73,86 +74,88 @@ as_create(void)
 }
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
-{
-	// (void)old;
-	// (void)ret;
-	// create new address space
-	if (!old) return EINVAL;
-
+{	
 	struct addrspace *newas;
-	newas = as_create();
+    newas = as_create();
 
-	// return error if not enough memory
-	if (newas == NULL) {
-		return ENOMEM;
-	}
+    // return error if not enough memory
+    if (newas == NULL) {
+        return ENOMEM;
+    }
 
-	// loop through old page table and hard copy contents to new address space
-	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
-		if (!old->pt[i]) continue;
-		newas->pt[i] = kmalloc(SECOND_LEVEL_SIZE * sizeof(paddr_t *));
-		// return error if not enough memory
-		if (newas->pt[i] == NULL) {
-			return ENOMEM;
-		}
-		for (int j = 0; j < SECOND_LEVEL_SIZE; j++) {
-			if (old->pt[i][j]) {
-				newas->pt[i][j] = kmalloc(THIRD_LEVEL_SIZE *sizeof(paddr_t));
-				// return error if not enough memory
-				if (newas->pt[i][j] == NULL) {
-					return ENOMEM;
-				}
-				for (int k = 0; k < THIRD_LEVEL_SIZE; k++) {
-					if (old->pt[i][j][k]) {
-						int dirty_bit = old->pt[i][j][k] & TLBLO_DIRTY;    
-						vaddr_t new_frame_addr = alloc_kpages(1);
-						memcpy((void *)new_frame_addr, (const void *)PADDR_TO_KVADDR(old->pt[i][j][k] & PAGE_FRAME), PAGE_SIZE);
-						newas->pt[i][j][k] = (KVADDR_TO_PADDR(new_frame_addr) & PAGE_FRAME) | dirty_bit | TLBLO_VALID;
-					}
-					else {
-						newas->pt[i][j][k] = 0;
-					}
-				}
-			}
-			else {
-				newas->pt[i][j] = NULL;
-			}
-			
-		}
-	}
+    // loop through old page table and hard copy contents to new address space
+    for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
+        if (!old->pt[i]) continue;
+        newas->pt[i] = kmalloc(SECOND_LEVEL_SIZE * sizeof(paddr_t *));
+        // return error if not enough memory
+        if (newas->pt[i] == NULL) {
+            return ENOMEM;
+        }
+        for (int j = 0; j < SECOND_LEVEL_SIZE; j++) {
+            if (old->pt[i][j]) {
+                newas->pt[i][j] = kmalloc(THIRD_LEVEL_SIZE *sizeof(paddr_t));
+                // return error if not enough memory
+                if (newas->pt[i][j] == NULL) {
+                    return ENOMEM;
+                }
+                for (int k = 0; k < THIRD_LEVEL_SIZE; k++) {
+                    if (old->pt[i][j][k]) {
+                        int dirty_bit = old->pt[i][j][k] & TLBLO_DIRTY;
+                        vaddr_t new_frame_addr = alloc_kpages(1);
+                        memcpy((void *)new_frame_addr, (const void *)PADDR_TO_KVADDR(old->pt[i][j][k] & PAGE_FRAME), PAGE_SIZE);
+                        newas->pt[i][j][k] = (KVADDR_TO_PADDR(new_frame_addr) & PAGE_FRAME) | dirty_bit | TLBLO_VALID;
+                    }
+                    else {
+                        newas->pt[i][j][k] = 0;
+                    }
+                }
+            }
+            else {
+                newas->pt[i][j] = NULL;
+            }
+
+        }
+    }
 
 	// no regions
-	if (old->regions == NULL) {
-		newas->regions = NULL;
-		*ret = newas;
-		return 0;
-	}
+    if (old->regions == NULL) {
+        newas->regions = NULL;
+        *ret = newas;
+        return 0;
+    }
 
 	// copy head of linked list
-	struct region *new_head = kmalloc(sizeof(struct region *));
-	new_head->start_vaddr = old->regions->start_vaddr;
-	new_head->npages = old->regions->npages;
-	new_head->writeable = old->regions->writeable;
-	new_head->old_writeable = old->regions->old_writeable;
-
-	struct region *p = new_head;
-	struct region *list = old->regions->next;
-	// copy rest of linked list
-	while(list != NULL) {
-		p->next = kmalloc(sizeof(struct regions *));
-        if (!p->next) {
-            as_destroy(newas);
-            return ENOMEM; /* Out of memory */
-        }
-		p = p->next;
-		p->start_vaddr = list->start_vaddr;
-		p->npages = list->npages;
-		p->writeable = list->writeable;
-		p->old_writeable = list->old_writeable;
+    struct region *reg = kmalloc(sizeof(struct region));
+	if (!reg) {
+		as_destroy(newas);
+		return ENOMEM;
 	}
-	p->next = NULL;
-
-	*ret = newas;
+    reg->start_vaddr = old->regions->start_vaddr;
+    reg->npages = old->regions->npages;
+    reg->writeable = old->regions->writeable;
+    reg->old_writeable = old->regions->old_writeable;
+    reg->next = NULL;
+	newas->regions = reg;
+    struct region *list = old->regions->next;
+	
+    // copy rest of linked list
+    while(list) {
+        struct region *temp_reg = kmalloc(sizeof(struct region));
+        if (!temp_reg) {
+            as_destroy(newas);
+            return ENOMEM;
+        }
+        temp_reg->start_vaddr = list->start_vaddr;
+        temp_reg->npages = list->npages;
+        temp_reg->writeable = list->writeable;
+        temp_reg->old_writeable = list->old_writeable;
+		temp_reg->next = NULL;
+		reg->next = temp_reg;
+		reg = reg->next;
+        list = list->next;
+    }
+    
+    *ret = newas;
 	return 0;
 }
 
@@ -175,7 +178,9 @@ as_destroy(struct addrspace *as)
 			}
 			kfree(as->pt[i][j]);
 		}
+		kfree(as->pt[i]);
 	}
+	kfree(as->pt);
 
 	// Free region linked list
 	struct region *cur = as->regions;
@@ -187,6 +192,8 @@ as_destroy(struct addrspace *as)
 	}
 
 	kfree(as);
+
+	as = NULL;
 }
 
 // Put translations into TLB of current address space, flush TLB
