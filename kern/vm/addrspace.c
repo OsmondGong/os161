@@ -63,19 +63,22 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-	as->pt = kmalloc(FIRST_LEVEL_SIZE * sizeof(paddr_t **));
 	for (int i = 0; i < FIRST_LEVEL_SIZE; i++) {
 		as->pt[i] = NULL;
 	}
 	as->regions = NULL;
 	
+	
 	return as;
 }
-
 int
 as_copy(struct addrspace *old, struct addrspace **ret)
 {
+	// (void)old;
+	// (void)ret;
 	// create new address space
+	if (!old) return EINVAL;
+
 	struct addrspace *newas;
 	newas = as_create();
 
@@ -114,6 +117,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			else {
 				newas->pt[i][j] = NULL;
 			}
+			
 		}
 	}
 
@@ -128,8 +132,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	struct region *new_head = kmalloc(sizeof(struct region *));
 	new_head->start_vaddr = old->regions->start_vaddr;
 	new_head->npages = old->regions->npages;
-	new_head->flags = old->regions->flags;
-	new_head->temp_flags = old->regions->temp_flags;
+	new_head->writeable = old->regions->writeable;
+	new_head->old_writeable = old->regions->old_writeable;
 
 	struct region *p = new_head;
 	struct region *list = old->regions->next;
@@ -143,9 +147,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		p = p->next;
 		p->start_vaddr = list->start_vaddr;
 		p->npages = list->npages;
-		p->flags = list->flags;
-		p->temp_flags = list->temp_flags;
-		list = list->next;
+		p->writeable = list->writeable;
+		p->old_writeable = list->old_writeable;
 	}
 	p->next = NULL;
 
@@ -172,7 +175,6 @@ as_destroy(struct addrspace *as)
 			}
 			kfree(as->pt[i][j]);
 		}
-		kfree(as->pt[i]);
 	}
 
 	// Free region linked list
@@ -213,7 +215,7 @@ as_activate(void)
 void
 as_deactivate(void)
 {
-	as_activate();
+	/* nothing */
 }
 
 /*
@@ -230,6 +232,10 @@ int
 as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 		 int readable, int writeable, int executable)
 {
+	/*
+	 * Write this.
+	 */
+
 	size_t npages = memsize / PAGE_SIZE;
 	// round up npages
 	if (memsize % PAGE_SIZE) npages++;
@@ -239,7 +245,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	if (r == NULL) return ENOMEM;
 	r->start_vaddr = vaddr & PAGE_FRAME;
 	r->npages = npages;
-	r->flags = r->temp_flags = readable | writeable | executable;
+	r->writeable = r->old_writeable = writeable;
 	r->next = NULL;
 	
 	// Add region to address space
@@ -259,9 +265,9 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t memsize,
 	//(void)as;
 	//(void)vaddr;
 	//(void)memsize;
-	//(void)readable;
+	(void)readable;
 	//(void)writeable;
-	//(void)executable;
+	(void)executable;
 	
 	return 0;
 }
@@ -273,11 +279,11 @@ as_prepare_load(struct addrspace *as)
 	 * Write this.
 	 */
 
-	// set as writable for each region in address space
+	// set as writeable for each region in address space
 	struct region *cur = as->regions;
 	while (cur != NULL) {
-		cur->flags = cur->flags | PF_W;		// make region writable
-		cur = cur->next;
+        cur->writeable = 1;
+        cur = cur->next;
 	}
 
 	return 0;
@@ -293,8 +299,8 @@ as_complete_load(struct addrspace *as)
 	// set back to READ ONLY for READ ONLY regions
 	struct region *cur = as->regions;
 	while (cur != NULL) {
-		cur->flags = cur->temp_flags;
-		cur = cur->next;
+        cur->writeable = cur->old_writeable;
+        cur = cur->next;
 	}
 
 	// flush TLB at end since TLB has writing enabled while loading segments

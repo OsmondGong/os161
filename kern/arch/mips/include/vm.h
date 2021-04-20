@@ -37,6 +37,7 @@
 
 #define PAGE_SIZE  4096         /* size of VM page */
 #define PAGE_FRAME 0xfffff000   /* mask for getting page number from addr */
+#define USERSTACKSIZE 16*PAGE_SIZE /* Fixed size stack region (16 pages) */
 
 /*
  * MIPS-I hardwired memory layout:

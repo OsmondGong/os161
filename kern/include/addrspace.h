@@ -50,8 +50,8 @@ struct vnode;
 struct region {
         vaddr_t start_vaddr;
         size_t npages;
-        int flags;
-        int temp_flags;         // for prepare_load and complete_load
+        uint32_t        writeable;          /* the writeable permission of the region */
+        uint32_t        old_writeable;      /* the original writeable permission */
         struct region *next;
 };
 
@@ -66,7 +66,7 @@ struct addrspace {
         paddr_t as_stackpbase;
 #else
         /* Put stuff here for your VM system */
-        paddr_t ***pt;
+        paddr_t **pt[FIRST_LEVEL_SIZE];
         // vaddr_t stack;
         // vaddr_t heap_start;
         // vaddr_t heap_end;

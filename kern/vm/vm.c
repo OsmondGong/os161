@@ -116,7 +116,7 @@ vm_fault(int faulttype, vaddr_t faultaddress)
             return ENOMEM;
         }
         bzero((void *)vaddr, PAGE_SIZE);
-        if (cur_region->flags & PF_W) {
+        if (cur_region->writeable) {
             as->pt[top_table_index][second_table_index][third_table_index] = KVADDR_TO_PADDR(vaddr) | TLBLO_DIRTY | TLBLO_VALID;
         }
         else {
